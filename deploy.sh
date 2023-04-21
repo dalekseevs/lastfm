@@ -12,7 +12,7 @@ echo "Downloading data files..."
 wget -O - http://mtg.upf.edu/static/datasets/last.fm/lastfm-dataset-1K.tar.gz | tar xz -C ~/lastfm-analyzer-data/input
 
 echo "Starting Spark Docker container and running analysis..."
-docker run\
+docker run --rm\
   --name lastfm-analyzer \
   -v ~/lastfm-analyzer-data:/data \
   -e INPUT_PATH='/data/input/lastfm-dataset-1K/userid-timestamp-artid-artname-traid-traname.tsv' \
