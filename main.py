@@ -6,6 +6,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import StructField, TimestampType
 from pyspark.sql.window import Window
+import pandas as pd
 
 
 class Analyzer:
@@ -39,10 +40,8 @@ class Analyzer:
         self.top_songs = _top_50_sessions.groupBy("artist_name", "track_name").agg(count("*").alias("play_count")).orderBy(desc("play_count"), "artist_name", "track_name").limit(n_top_songs)
 
     def write_output(self, path: Path):
-        self.top_songs.write.format("csv") \
-            .option("header", "true") \
-            .option("delimiter", "\t") \
-            .save(path)
+        pandas_df = self.top_songs.toPandas()
+        pandas_df.to_csv(path, sep="\t", index=False, mode="w")
 
     def cleanup(self):
         self.spark_session.stop()
