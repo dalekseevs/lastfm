@@ -1,21 +1,28 @@
 import logging
 import os
-from pathlib import Path
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import StructField, TimestampType
 from pyspark.sql.window import Window
-import pandas as pd
 
 
 class Analyzer:
     def __init__(self, _spark_session: SparkSession):
-        self.spark_session = _spark_session
+        """
+        :param _spark_session: SparkSession instance to use for analyzing the data.
+        """
+        self.spark_session: SparkSession = _spark_session
         self.data: DataFrame = None
         self.top_songs: DataFrame = None
 
-    def load_data(self, path: Path, input_schema: StructType):
+    def load_data(self, path: str, input_schema: StructType):
+        """
+        Loads data from a CSV file.
+
+        :param path: Path to the CSV file to load.
+        :param input_schema: StructType schema to use for interpreting the data.
+        """
         self.data = self.spark_session.read.format("csv") \
             .option("header", "false") \
             .option("delimiter", "\t") \
@@ -24,6 +31,13 @@ class Analyzer:
             .load(path)
 
     def analyze(self, song_gap_minutes: int, n_top_session: int, n_top_songs: int):
+        """
+        Analyzes the loaded data and calculates the top songs by count played in the top sessions.
+
+        :param song_gap_minutes: Number of minutes between song start times to consider them as the same session.
+        :param n_top_session: Number of top sessions to consider when determining the top songs.
+        :param n_top_songs: Number of top songs to include in the output.
+        """
         _session_window = Window.partitionBy("user").orderBy("timestamp")
         self.data = self.data.withColumn("prev_timestamp", lag("timestamp", 1).over(_session_window))
         self.data = self.data.withColumn("session_id", sum(when(col("timestamp").cast("long") - col("prev_timestamp").cast("long") > song_gap_minutes * 60, 1).otherwise(0)).over(_session_window))
@@ -39,17 +53,19 @@ class Analyzer:
 
         self.top_songs = _top_50_sessions.groupBy("artist_name", "track_name").agg(count("*").alias("play_count")).orderBy(desc("play_count"), "artist_name", "track_name").limit(n_top_songs)
 
-    def write_output(self, path: Path):
+    def write_output(self, path: str):
+        """
+        Writes the top songs data to a TSV file.
+
+        :param path: Path to the output TSV file.
+        """
         pandas_df = self.top_songs.toPandas()
         pandas_df.to_csv(path, sep="\t", index=False, mode="w")
 
-    def cleanup(self):
-        self.spark_session.stop()
-
 
 if __name__ == "__main__":
-    logger = logging.getLogger("pyspark")
-    logger.setLevel(logging.INFO)
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    logger = logging.getLogger("lastfm-analyzer-app")
 
     logger.info("Getting path from environment variables...")
     input_path = os.environ.get("INPUT_PATH")
@@ -59,7 +75,7 @@ if __name__ == "__main__":
 
     logger.info("Creating Spark session...")
     spark_session = SparkSession.builder \
-        .appName("LastFM Top Songs Challenge") \
+        .appName("lastfm-analyzer-app") \
         .getOrCreate()
 
     schema = StructType([
@@ -77,9 +93,9 @@ if __name__ == "__main__":
     analyzer.load_data(path=input_path, input_schema=schema)
     logger.info("Analyzing data...")
     analyzer.analyze(song_gap_minutes=20, n_top_session=50, n_top_songs=10)
-    logger.info(f"Done analyzing data! Top songs:\n{analyzer.top_songs.show()}")
     logger.info("Writing output...")
     analyzer.write_output(path=output_path)
+    logger.info(f"Done analyzing data! Top songs:\n{analyzer.top_songs.show()}")
     logger.info("Cleaning up...")
-    analyzer.cleanup()
+    spark_session.stop()
     logger.info("Done!")
