@@ -42,7 +42,8 @@
 
 
 ## Improvements
-* Make deploy script idempotent.
+* Make deploy script more efficient by checking if source files are already downloaded.
+* Optimize parallelization and resource allocation for Spark jobs.
 * Add more tests, test cases and benchmarks to ensure the correctness and scalability of the solution.
 * Add a CI/CD pipeline script to automate the integration and deployment process.
 * Better application monitoring.
